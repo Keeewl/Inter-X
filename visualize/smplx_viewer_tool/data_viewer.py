@@ -27,6 +27,7 @@ height = mode.size.height
 
 C.update_conf({'window_width': width*0.9, 'window_height': height*0.9})
 C.update_conf({'smplx_models':'./body_models'})
+C.update_conf({'window_type': 'pyqt6'})
 
 
 class SMPLX_Viewer(Viewer):
