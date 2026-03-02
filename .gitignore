@@ -147,3 +147,13 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# datasets
+motions/
+texts/
+*.txt
+
+# soft link
+data
+texts
+imgui.ini

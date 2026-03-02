@@ -3,12 +3,6 @@ import os
 import platform
 import time
 
-# fix xvfbwrapper bug
-os.environ["GIT_PYTHON_REFRESH"] = "quiet"
-os.environ["PYOPENGL_PLATFORM"] = "egl"
-os.environ["DISABLE_GLFW"] = "1"
-os.environ["AITVIEWER_HEADLESS"] = "1"
-
 import glfw
 import imgui
 import numpy as np
@@ -37,6 +31,10 @@ C.update_conf({'smplx_models':'./body_models'})
 
 class SMPLX_Viewer(Viewer):
     title='Inter-X Viewer' 
+
+    # fix bug: NotImplementedError: WindowConfig.on_render not implemented
+    def on_render(self, time: float, frame_time: float):
+        self.render(time, frame_time)
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
