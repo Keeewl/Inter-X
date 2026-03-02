@@ -3,6 +3,12 @@ import os
 import platform
 import time
 
+# fix xvfbwrapper bug
+os.environ["GIT_PYTHON_REFRESH"] = "quiet"
+os.environ["PYOPENGL_PLATFORM"] = "egl"
+os.environ["DISABLE_GLFW"] = "1"
+os.environ["AITVIEWER_HEADLESS"] = "1"
+
 import glfw
 import imgui
 import numpy as np
