@@ -152,8 +152,12 @@ dmypy.json
 motions/
 texts/
 *.txt
+chi3d/
 
 # soft link
 data
 texts
 imgui.ini
+chi3d_data
+interx_data
+interx_texts

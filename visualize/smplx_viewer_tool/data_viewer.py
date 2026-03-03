@@ -8,6 +8,7 @@ import imgui
 import numpy as np
 import pyperclip
 import trimesh
+import argparse
 from aitviewer.configuration import CONFIG as C
 from aitviewer.renderables.meshes import Meshes
 from aitviewer.renderables.skeletons import Skeletons
@@ -37,7 +38,7 @@ class SMPLX_Viewer(Viewer):
     def on_render(self, time: float, frame_time: float):
         self.render(time, frame_time)
 
-    def __init__(self,**kwargs):
+    def __init__(self, clip_folder='./data/', text_folder='./texts', **kwargs):
         super().__init__(**kwargs)
         self.gui_controls.update(
             {
@@ -48,15 +49,15 @@ class SMPLX_Viewer(Viewer):
         self._set_next_record=self.wnd.keys.DOWN
 
         # reset
-        self.reset_for_interx()
+        self.reset_for_interx(clip_folder, text_folder)
         self.load_one_sequence()
 
-    def reset_for_interx(self):
+    def reset_for_interx(self, clip_folder, text_folder):
         
         self.text_val = ''
 
-        self.clip_folder = './data/'
-        self.text_folder = './texts'
+        self.clip_folder = clip_folder
+        self.text_folder = text_folder
 
         self.label_npy_list = []
         self.get_label_file_list()
@@ -127,12 +128,16 @@ class SMPLX_Viewer(Viewer):
         self.scene.current_frame_id=0
 
     def get_label_file_list(self):
+        if not os.path.isdir(self.clip_folder):
+            raise FileNotFoundError(f'Clip folder not found: {self.clip_folder}')
         for clip in sorted(os.listdir(self.clip_folder)):
             if not clip.startswith('.'):
                 self.label_npy_list.append(os.path.join(self.clip_folder, clip))
     
     def load_text_from_file(self):
         self.text_val = ''
+        if not self.text_folder:
+            return
         clip_name = self.label_npy_list[self.label_pid].split('/')[-1]
         if os.path.exists(os.path.join(self.text_folder, clip_name+'.txt')):
             with open(os.path.join(self.text_folder, clip_name+'.txt'), 'r') as f:
@@ -206,7 +211,33 @@ class SMPLX_Viewer(Viewer):
 
 if __name__=='__main__':
 
-    viewer=SMPLX_Viewer()
-    viewer.scene.fps=120
-    viewer.playback_fps=120
+    parser = argparse.ArgumentParser(description='Inter-X / Chi3D SMPL-X viewer')
+    parser.add_argument('--dataset', choices=['interx', 'chi3d'], help='Choose a preset dataset')
+    parser.add_argument('--data_dir', help='Path to data folder (contains clip subfolders)')
+    parser.add_argument('--texts_dir', help='Path to texts folder (optional)')
+    args = parser.parse_args()
+
+    data_dir = args.data_dir
+    texts_dir = args.texts_dir
+    if args.dataset and not data_dir:
+        if args.dataset == 'interx':
+            data_dir = './interx_data'
+            if texts_dir is None:
+                texts_dir = './interx_texts'
+        elif args.dataset == 'chi3d':
+            data_dir = './chi3d_data'
+            if texts_dir is None:
+                texts_dir = ''
+    if data_dir is None:
+        data_dir = './data/'
+    if texts_dir is None:
+        texts_dir = './texts'
+
+    viewer=SMPLX_Viewer(clip_folder=data_dir, text_folder=texts_dir)
+    if args.dataset == 'chi3d':
+        viewer.scene.fps=50
+        viewer.playback_fps=50
+    else:
+        viewer.scene.fps=120
+        viewer.playback_fps=120
     viewer.run()
