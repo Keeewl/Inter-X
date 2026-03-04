@@ -12,6 +12,7 @@ ln -s /Users/keweiou/Desktop/Project/Inter-X/datasets/interx/motions ./interx_da
 ln -s /Users/keweiou/Desktop/Project/Inter-X/datasets/interx/texts ./interx_texts
 
 # vasual inter-x datasets
+cd visualize/smplx_viewer_tool
 python data_viewer.py --dataset interx
 
 # load the SMPL-X motion parameters
@@ -20,16 +21,18 @@ python load_smplx_para.py
 
 # Chi3d Dataset
 ```bash
-# convert h5 file to motions
+# convert h5 file to motions and fix the problem of body flip
 python datasets/chi3d/check/convert_chi3d_to_aitviewer.py \
   --h5_dir datasets/chi3d/smplx/conditioned \
   --out_dir datasets/chi3d/motions \
-  --body_has_root
+  --body_has_root \
+  --flip_x
 
 # create soft link (execute once)
 cd visualize/smplx_viewer_tool
 ln -s /Users/keweiou/Desktop/Project/Inter-X/datasets/chi3d/motions ./chi3d_data
 
 # vasual chi3d datasets
+cd visualize/smplx_viewer_tool
 python data_viewer.py --dataset chi3d
 ```
