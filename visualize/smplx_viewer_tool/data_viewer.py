@@ -19,6 +19,11 @@ from scipy.spatial.transform import Rotation as R
 from aitviewer.models.smpl import SMPLLayer
 from aitviewer.renderables.smpl import SMPLSequence
 
+"""
+Outputs in chi3d:
+P1: cmotion -> actor    -> blue
+P2: outputs -> reactor  -> red
+"""
 
 glfw.init()
 primary_monitor = glfw.get_primary_monitor()
@@ -38,8 +43,16 @@ class SMPLX_Viewer(Viewer):
     def on_render(self, time: float, frame_time: float):
         self.render(time, frame_time)
 
-    def __init__(self, clip_folder='./data/', text_folder='./texts', **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, clip_folder='./data/', text_folder='./texts', title=None, dataset=None, **kwargs):
+        window_title = title or self.title
+        super().__init__(title=window_title, **kwargs)
+        self.title = window_title
+        if dataset == 'interx':
+            self.text_window_title = 'Inter-X Text Descriptions'
+        elif dataset == 'chi3d':
+            self.text_window_title = 'Chi3D Text (N/A)'
+        else:
+            self.text_window_title = 'Text Descriptions'
         self.gui_controls.update(
             {
                 'show_text':self.gui_show_text
@@ -80,7 +93,7 @@ class SMPLX_Viewer(Viewer):
     def gui_show_text(self):
         imgui.set_next_window_position(self.window_size[0] * 0.6, self.window_size[1]*0.25, imgui.FIRST_USE_EVER)
         imgui.set_next_window_size(self.window_size[0] * 0.35, self.window_size[1]*0.4, imgui.FIRST_USE_EVER)
-        expanded, _ = imgui.begin("Inter-X Text Descriptions", None)
+        expanded, _ = imgui.begin(self.text_window_title, None)
 
         if expanded:
             npy_folder = self.label_npy_list[self.label_pid].split('/')[-1]
@@ -215,6 +228,7 @@ if __name__=='__main__':
     parser.add_argument('--dataset', choices=['interx', 'chi3d'], help='Choose a preset dataset')
     parser.add_argument('--data_dir', help='Path to data folder (contains clip subfolders)')
     parser.add_argument('--texts_dir', help='Path to texts folder (optional)')
+    parser.add_argument('--title', help='Window title override')
     args = parser.parse_args()
 
     data_dir = args.data_dir
@@ -233,7 +247,7 @@ if __name__=='__main__':
     if texts_dir is None:
         texts_dir = './texts'
 
-    viewer=SMPLX_Viewer(clip_folder=data_dir, text_folder=texts_dir)
+    viewer=SMPLX_Viewer(clip_folder=data_dir, text_folder=texts_dir, title=args.title, dataset=args.dataset)
     if args.dataset == 'chi3d':
         viewer.scene.fps=50
         viewer.playback_fps=50

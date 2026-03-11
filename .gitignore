@@ -161,3 +161,6 @@ imgui.ini
 chi3d_data
 interx_data
 interx_texts
+
+# outputs
+outputs/
