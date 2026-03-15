@@ -5,19 +5,20 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-train_file = '/data/xuliang/Inter-X/Inter-X_Dataset/splits/train.txt'
-val_file = '/data/xuliang/Inter-X/Inter-X_Dataset/splits/val.txt'
-test_file = '/data/xuliang/Inter-X/Inter-X_Dataset/splits/test.txt'
+train_file = '../datasets/interx/splits/train.txt'
+val_file = '../datasets/interx/splits/val.txt'
+test_file = '../datasets/interx/splits/test.txt'
 
-hhi_file = '/data/xuliang/Inter-X/inter-x.h5'
+hhi_file = './regen/inter-x_regen.h5'
 
 train_list = [line.rstrip('\n') for line in open(train_file, "r").readlines()]
 val_list = [line.rstrip('\n') for line in open(val_file, "r").readlines()]
 test_list = [line.rstrip('\n') for line in open(test_file, "r").readlines()]
 
-fw_train = h5py.File('/data/xuliang/Inter-X/train.h5', 'w')
-fw_val = h5py.File('/data/xuliang/Inter-X/val.h5', 'w')
-fw_test = h5py.File('/data/xuliang/Inter-X/test.h5', 'w')
+os.makedirs('./regen', exist_ok=True)
+fw_train = h5py.File('./regen/train.h5', 'w')
+fw_val = h5py.File('./regen/val.h5', 'w')
+fw_test = h5py.File('./regen/test.h5', 'w')
 
 with h5py.File(hhi_file, 'r') as f:
     keys = list(f.keys())

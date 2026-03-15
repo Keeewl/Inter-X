@@ -18,7 +18,23 @@ cd visualize/smplx_viewer_tool
 python data_viewer.py --dataset interx
 
 # Load the SMPL-X motion parameters
+cd datasets
 python load_smplx_para.py
+```
+
+
+
+# Inter-X Reaction Generation Preprocess
+```bash
+# 1. Build inter-x.h5 from raw motions
+cd preprocess
+python 1_prepare_data.py
+
+# 2. Align actor->reactor order into inter-x_regen.h5
+python 4_reaction_generation.py
+
+# 3. Split into train/val/test for reaction generation
+python 2_split_train_val.py
 ```
 
 

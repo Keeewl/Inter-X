@@ -2,9 +2,7 @@ import os
 import numpy as np
 
 # load the motion data
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
-motion_path = os.path.join(repo_root, 'datasets', 'motions', 'G001T000A000R000', 'P1.npz')
-motion = np.load(motion_path)
+motion = np.load('interx/motions/G001T000A000R000/P1.npz')
 motion_parms = {
             'root_orient': motion['root_orient'],  # controls the global root orientation
             'pose_body': motion['pose_body'],  # controls the body

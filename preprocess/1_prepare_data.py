@@ -10,9 +10,9 @@ from tqdm import tqdm
 import utils.rotation_conversions as geometry
 from ipdb import set_trace
 
-SRC = 'xxx/Inter-X_Open_Source/motions'
-DEST_H5 = './inter-x.h5'
-neutral_bm_path = '../body_models/smplx/SMPLX_NEUTRAL.npz'
+SRC = '../datasets/interx/motions'
+DEST_H5 = './regen/inter-x.h5'
+neutral_bm_path = '../visualize/smplx_viewer_tool/body_models/smplx/SMPLX_NEUTRAL.npz'
 
 comp_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from human_body_prior.body_model.body_model import BodyModel
@@ -75,9 +75,14 @@ def normalize_transl(motion_p1, motion_p2):
 
 
 if __name__ == '__main__':
+    os.makedirs(os.path.dirname(DEST_H5), exist_ok=True)
     fw = h5py.File(DEST_H5, 'w')
     # Load all samples
-    pbar = tqdm(sorted(os.listdir(SRC)))
+    split_ids = [
+        name for name in sorted(os.listdir(SRC))
+        if name.startswith('G') and os.path.isdir(os.path.join(SRC, name))
+    ]
+    pbar = tqdm(split_ids)
     for split_id in pbar:
         idx = split_id.find('A')
         cur_action_id = int(split_id[idx+1:idx+4])

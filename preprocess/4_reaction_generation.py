@@ -3,13 +3,14 @@ import pickle
 import h5py
 import numpy as np
 
-SRC_H5 = '/data/xuliang/Inter-X/inter-x.hh5'
-DEST_H5 = '/data/xuliang/Inter-X/Inter-X_Dataset/inter-x_regen.h5'
-label_file = '/data/xuliang/Inter-X/Inter-X_Dataset/annots/interaction_order.pkl'
+SRC_H5 = './regen/inter-x.h5'
+DEST_H5 = './regen/inter-x_regen.h5'
+label_file = '../datasets/interx/annots/interaction_order.pkl'
 
 with open(label_file, 'rb') as handle:
     order_dict = pickle.load(handle)
 
+os.makedirs(os.path.dirname(DEST_H5), exist_ok=True)
 f_out = h5py.File(DEST_H5, 'w')
 
 with h5py.File(SRC_H5, 'r') as f:
