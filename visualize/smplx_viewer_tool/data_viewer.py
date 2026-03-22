@@ -9,6 +9,8 @@ import numpy as np
 import pyperclip
 import trimesh
 import argparse
+import json
+import pickle
 from aitviewer.configuration import CONFIG as C
 from aitviewer.renderables.meshes import Meshes
 from aitviewer.renderables.skeletons import Skeletons
@@ -36,6 +38,97 @@ C.update_conf({'smplx_models':'./body_models'})
 C.update_conf({'window_type': 'pyqt6'})
 
 
+def load_part_segm(path):
+    with open(path, 'rb') as f:
+        segm = pickle.load(f)
+    if not isinstance(segm, dict):
+        raise ValueError('parts segmentation must be a dict: part_name -> vertex indices')
+    return segm
+
+
+def load_part_colors(path, part_names):
+    if not path:
+        palette = [
+            (0.90, 0.30, 0.30, 1.0),
+            (0.30, 0.60, 0.95, 1.0),
+            (0.35, 0.85, 0.55, 1.0),
+            (0.95, 0.70, 0.25, 1.0),
+            (0.80, 0.50, 0.90, 1.0),
+            (0.60, 0.60, 0.60, 1.0),
+        ]
+        return {name: palette[i % len(palette)] for i, name in enumerate(part_names)}
+
+    with open(path, 'r') as f:
+        colors = json.load(f)
+    out = {}
+    for name, rgba in colors.items():
+        if len(rgba) == 3:
+            rgba = rgba + [1.0]
+        if max(rgba) > 1.0:
+            rgba = [c / 255.0 for c in rgba]
+        out[name] = tuple(rgba)
+    return out
+
+
+def get_num_verts_from_layer(smplx_layer):
+    for attr in ("v_template", "template_v"):
+        if hasattr(smplx_layer, attr):
+            return int(getattr(smplx_layer, attr).shape[0])
+    for obj_attr in ("bm", "model", "smpl"):
+        obj = getattr(smplx_layer, obj_attr, None)
+        if obj is None:
+            continue
+        for attr in ("v_template", "template_v"):
+            if hasattr(obj, attr):
+                return int(getattr(obj, attr).shape[0])
+    return None
+
+
+def build_part_vertex_colors(smplx_layer, segm_path, colors_path):
+    segm = load_part_segm(segm_path)
+    part_names = sorted(segm.keys())
+    part_colors = load_part_colors(colors_path, part_names)
+
+    num_verts = get_num_verts_from_layer(smplx_layer)
+    if num_verts is None:
+        num_verts = max(max(v) for v in segm.values()) + 1
+
+    default_color = (0.7, 0.7, 0.7, 1.0)
+    vertex_colors = np.tile(default_color, (num_verts, 1)).astype(np.float32)
+    for part_name, indices in segm.items():
+        color = part_colors.get(part_name, default_color)
+        vertex_colors[np.array(indices, dtype=np.int64)] = color
+
+    return vertex_colors
+
+
+def apply_vertex_colors(renderable, vertex_colors):
+    # SMPLSequence stores geometry in mesh_seq; set colors there if available.
+    mesh_seq = getattr(renderable, "mesh_seq", None)
+    if mesh_seq is not None:
+        mesh_seq.vertex_colors = vertex_colors
+        return
+
+    if hasattr(renderable, "use_vertex_colors"):
+        renderable.use_vertex_colors = True
+    if hasattr(renderable, "color") and renderable.color is None:
+        # Keep a valid RGBA to avoid None access in renderer.
+        renderable.color = (1.0, 1.0, 1.0, 1.0)
+    if hasattr(renderable, "set_vertex_colors"):
+        renderable.set_vertex_colors(vertex_colors)
+        return
+    for attr in ("v_colors", "vertex_colors", "vc"):
+        if hasattr(renderable, attr):
+            setattr(renderable, attr, vertex_colors)
+            return
+    mesh = getattr(renderable, "mesh", None)
+    if mesh is not None:
+        for attr in ("v_colors", "vertex_colors", "vc"):
+            if hasattr(mesh, attr):
+                setattr(mesh, attr, vertex_colors)
+                return
+
+
 class SMPLX_Viewer(Viewer):
     title='Inter-X Viewer' 
 
@@ -43,7 +136,8 @@ class SMPLX_Viewer(Viewer):
     def on_render(self, time: float, frame_time: float):
         self.render(time, frame_time)
 
-    def __init__(self, clip_folder='./data/', text_folder='./texts', title=None, dataset=None, **kwargs):
+    def __init__(self, clip_folder='./data/', text_folder='./texts', title=None, dataset=None,
+                 part_segm=None, part_colors=None, **kwargs):
         window_title = title or self.title
         super().__init__(title=window_title, **kwargs)
         self.title = window_title
@@ -62,6 +156,9 @@ class SMPLX_Viewer(Viewer):
         self._set_next_record=self.wnd.keys.DOWN
 
         # reset
+        self.part_segm = part_segm
+        self.part_colors = part_colors
+        self.part_vertex_colors = None
         self.reset_for_interx(clip_folder, text_folder)
         self.load_one_sequence()
 
@@ -190,27 +287,46 @@ class SMPLX_Viewer(Viewer):
         smplx_layer_p1 = SMPLLayer(model_type='smplx',gender=gender_p1,num_betas=10,device=C.device)
         smplx_layer_p2 = SMPLLayer(model_type='smplx',gender=gender_p2,num_betas=10,device=C.device)
 
+        if self.part_segm and self.part_vertex_colors is None:
+            self.part_vertex_colors = build_part_vertex_colors(
+                smplx_layer_p1, self.part_segm, self.part_colors
+            )
+
+        use_part_colors = self.part_vertex_colors is not None
+        seq_kwargs_p1 = dict(
+            poses_body=poses_body_p1,
+            smpl_layer=smplx_layer_p1,
+            poses_root=poses_root_p1,
+            betas=betas_p1,
+            trans=transl_p1,
+            poses_left_hand=poses_lhand_p1,
+            poses_right_hand=poses_rhand_p1,
+            device=C.device,
+        )
+        seq_kwargs_p2 = dict(
+            poses_body=poses_body_p2,
+            smpl_layer=smplx_layer_p2,
+            poses_root=poses_root_p2,
+            betas=betas_p2,
+            trans=transl_p2,
+            poses_left_hand=poses_lhand_p2,
+            poses_right_hand=poses_rhand_p2,
+            device=C.device,
+        )
+        if use_part_colors:
+            # Ensure a valid color tuple for shadow rendering; vertex colors will drive appearance.
+            seq_kwargs_p1["color"] = (1.0, 1.0, 1.0, 1.0)
+            seq_kwargs_p2["color"] = (1.0, 1.0, 1.0, 1.0)
+        else:
+            seq_kwargs_p1["color"] = (0.11, 0.53, 0.8, 1.0)
+            seq_kwargs_p2["color"] = (1.0, 0.27, 0, 1.0)
+
         # create smplx sequence for two persons
-        smplx_seq_p1 = SMPLSequence(poses_body=poses_body_p1,
-                            smpl_layer=smplx_layer_p1,
-                            poses_root=poses_root_p1,
-                            betas=betas_p1,
-                            trans=transl_p1,
-                            poses_left_hand=poses_lhand_p1,
-                            poses_right_hand=poses_rhand_p1,
-                            device=C.device,
-                            color=(0.11, 0.53, 0.8, 1.0)
-                            )
-        smplx_seq_p2 = SMPLSequence(poses_body=poses_body_p2,
-                            smpl_layer=smplx_layer_p2,
-                            poses_root=poses_root_p2,
-                            betas=betas_p2,
-                            trans=transl_p2,
-                            poses_left_hand=poses_lhand_p2,
-                            poses_right_hand=poses_rhand_p2,
-                            device=C.device,
-                            color=(1.0, 0.27, 0, 1.0)
-                            )
+        smplx_seq_p1 = SMPLSequence(**seq_kwargs_p1)
+        smplx_seq_p2 = SMPLSequence(**seq_kwargs_p2)
+        if self.part_vertex_colors is not None:
+            apply_vertex_colors(smplx_seq_p1, self.part_vertex_colors)
+            apply_vertex_colors(smplx_seq_p2, self.part_vertex_colors)
         self.scene.add(smplx_seq_p1)
         self.scene.add(smplx_seq_p2)
         self.load_text_from_file()
@@ -229,6 +345,8 @@ if __name__=='__main__':
     parser.add_argument('--data_dir', help='Path to data folder (contains clip subfolders)')
     parser.add_argument('--texts_dir', help='Path to texts folder (optional)')
     parser.add_argument('--title', help='Window title override')
+    parser.add_argument('--part_segm', help='Path to parts segmentation .pkl (dict: part_name -> vertex indices)')
+    parser.add_argument('--part_colors', help='Path to JSON colors file (dict: part_name -> rgba)')
     args = parser.parse_args()
 
     data_dir = args.data_dir
@@ -247,7 +365,14 @@ if __name__=='__main__':
     if texts_dir is None:
         texts_dir = './texts'
 
-    viewer=SMPLX_Viewer(clip_folder=data_dir, text_folder=texts_dir, title=args.title, dataset=args.dataset)
+    viewer=SMPLX_Viewer(
+        clip_folder=data_dir,
+        text_folder=texts_dir,
+        title=args.title,
+        dataset=args.dataset,
+        part_segm=args.part_segm,
+        part_colors=args.part_colors,
+    )
     if args.dataset == 'chi3d':
         viewer.scene.fps=50
         viewer.playback_fps=50
