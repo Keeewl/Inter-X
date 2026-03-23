@@ -17,6 +17,7 @@ neutral_bm_path = '../visualize/smplx_viewer_tool/body_models/smplx/SMPLX_NEUTRA
 comp_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 from human_body_prior.body_model.body_model import BodyModel
 
+# downsample to 30 fps for training and evaluation
 num_betas = 10
 downsample = 4
 

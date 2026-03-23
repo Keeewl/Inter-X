@@ -27,6 +27,7 @@ P1: cmotion -> actor    -> blue
 P2: outputs -> reactor  -> red
 """
 
+# Obtain the main display resolution
 glfw.init()
 primary_monitor = glfw.get_primary_monitor()
 mode = glfw.get_video_mode(primary_monitor)
@@ -39,14 +40,13 @@ C.update_conf({'window_type': 'pyqt6'})
 
 
 def load_part_segm(path):
+    # Load {part_name: vertex_indices} from a pickle.
     with open(path, 'rb') as f:
-        segm = pickle.load(f)
-    if not isinstance(segm, dict):
-        raise ValueError('parts segmentation must be a dict: part_name -> vertex indices')
-    return segm
+        return pickle.load(f)
 
 
 def load_part_colors(path, part_names):
+    # Load {part_name: rgba}; if not provided, use a small default palette.
     if not path:
         palette = [
             (0.90, 0.30, 0.30, 1.0),
@@ -71,20 +71,16 @@ def load_part_colors(path, part_names):
 
 
 def get_num_verts_from_layer(smplx_layer):
-    for attr in ("v_template", "template_v"):
-        if hasattr(smplx_layer, attr):
-            return int(getattr(smplx_layer, attr).shape[0])
-    for obj_attr in ("bm", "model", "smpl"):
-        obj = getattr(smplx_layer, obj_attr, None)
-        if obj is None:
-            continue
-        for attr in ("v_template", "template_v"):
-            if hasattr(obj, attr):
-                return int(getattr(obj, attr).shape[0])
+    # Read vertex count from the SMPL-X layer template.
+    if hasattr(smplx_layer, "v_template"):
+        return int(smplx_layer.v_template.shape[0])
+    if hasattr(smplx_layer, "template_v"):
+        return int(smplx_layer.template_v.shape[0])
     return None
 
 
 def build_part_vertex_colors(smplx_layer, segm_path, colors_path):
+    # Build per-vertex RGBA colors from a part segmentation and color palette.
     segm = load_part_segm(segm_path)
     part_names = sorted(segm.keys())
     part_colors = load_part_colors(colors_path, part_names)
@@ -96,24 +92,14 @@ def build_part_vertex_colors(smplx_layer, segm_path, colors_path):
     default_color = (0.7, 0.7, 0.7, 1.0)
     vertex_colors = np.tile(default_color, (num_verts, 1)).astype(np.float32)
     for part_name, indices in segm.items():
-        color = part_colors.get(part_name, default_color)
-        vertex_colors[np.array(indices, dtype=np.int64)] = color
+        vertex_colors[np.array(indices, dtype=np.int64)] = part_colors.get(part_name, default_color)
 
     return vertex_colors
 
 
 def apply_vertex_colors(renderable, vertex_colors):
-    # SMPLSequence stores geometry in mesh_seq; set colors there if available.
-    mesh_seq = getattr(renderable, "mesh_seq", None)
-    if mesh_seq is not None:
-        mesh_seq.vertex_colors = vertex_colors
-        return
-
-    if hasattr(renderable, "use_vertex_colors"):
-        renderable.use_vertex_colors = True
-    if hasattr(renderable, "color") and renderable.color is None:
-        # Keep a valid RGBA to avoid None access in renderer.
-        renderable.color = (1.0, 1.0, 1.0, 1.0)
+    # SMPLSequence renders via mesh_seq; set vertex colors there.
+    renderable.mesh_seq.vertex_colors = vertex_colors
     if hasattr(renderable, "set_vertex_colors"):
         renderable.set_vertex_colors(vertex_colors)
         return
