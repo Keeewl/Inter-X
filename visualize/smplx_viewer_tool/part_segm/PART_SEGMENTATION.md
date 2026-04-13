@@ -43,4 +43,13 @@ python data_viewer.py \
   --dataset interx \
   --part_segm part_segm/6_parts/six_parts.pkl \
   --part_colors part_segm/6_parts/six_parts_colors.json
+
+  --part_colors part_segm/6_parts/three_parts_colors.json
+  --part_colors part_segm/6_parts/one_parts_colors.json
+
+
+python data_viewer.py \
+  --dataset interx \
+  --part_segm part_segm/2_parts/hand_foot_body.pkl \
+  --part_colors part_segm/2_parts/hand_foot_body_colors.json
 ```

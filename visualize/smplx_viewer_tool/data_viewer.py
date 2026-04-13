@@ -123,7 +123,7 @@ class SMPLX_Viewer(Viewer):
         self.render(time, frame_time)
 
     def __init__(self, clip_folder='./data/', text_folder='./texts', title=None, dataset=None,
-                 part_segm=None, part_colors=None, **kwargs):
+                 part_segm=None, part_colors=None, share_shape="none", **kwargs):
         window_title = title or self.title
         super().__init__(title=window_title, **kwargs)
         self.title = window_title
@@ -145,6 +145,7 @@ class SMPLX_Viewer(Viewer):
         self.part_segm = part_segm
         self.part_colors = part_colors
         self.part_vertex_colors = None
+        self.share_shape = share_shape
         self.reset_for_interx(clip_folder, text_folder)
         self.load_one_sequence()
 
@@ -269,6 +270,18 @@ class SMPLX_Viewer(Viewer):
         transl_p2 = params_p2['trans']
         gender_p2 = str(params_p2['gender'])
 
+        if self.share_shape == "p1":
+            betas_p2 = betas_p1
+            gender_p2 = gender_p1
+        elif self.share_shape == "p2":
+            betas_p1 = betas_p2
+            gender_p1 = gender_p2
+        elif self.share_shape == "mean":
+            betas_mean = (betas_p1 + betas_p2) * 0.5
+            betas_p1 = betas_mean
+            betas_p2 = betas_mean
+            gender_p2 = gender_p1
+
         # create body models
         smplx_layer_p1 = SMPLLayer(model_type='smplx',gender=gender_p1,num_betas=10,device=C.device)
         smplx_layer_p2 = SMPLLayer(model_type='smplx',gender=gender_p2,num_betas=10,device=C.device)
@@ -304,8 +317,15 @@ class SMPLX_Viewer(Viewer):
             seq_kwargs_p1["color"] = (1.0, 1.0, 1.0, 1.0)
             seq_kwargs_p2["color"] = (1.0, 1.0, 1.0, 1.0)
         else:
-            seq_kwargs_p1["color"] = (0.11, 0.53, 0.8, 1.0)
-            seq_kwargs_p2["color"] = (1.0, 0.27, 0, 1.0)
+            # initial color
+            # seq_kwargs_p1["color"] = (0.11, 0.53, 0.8, 1.0)
+            # seq_kwargs_p2["color"] = (1.0, 0.27, 0, 1.0)
+
+            # seq_kwargs_p1["color"] = (0.10, 0.47, 0.78, 1.0)   # 蓝色：更稳一点
+            # seq_kwargs_p2["color"] = (0.82, 0.43, 0.28, 1.0)
+
+            seq_kwargs_p1["color"] = (0.10, 0.47, 0.78, 1.0)
+            seq_kwargs_p2["color"] = (0.88, 0.30, 0.20, 1.0)
 
         # create smplx sequence for two persons
         smplx_seq_p1 = SMPLSequence(**seq_kwargs_p1)
@@ -333,6 +353,12 @@ if __name__=='__main__':
     parser.add_argument('--title', help='Window title override')
     parser.add_argument('--part_segm', help='Path to parts segmentation .pkl (dict: part_name -> vertex indices)')
     parser.add_argument('--part_colors', help='Path to JSON colors file (dict: part_name -> rgba)')
+    parser.add_argument(
+        '--share_shape',
+        choices=['none', 'p1', 'p2', 'mean'],
+        default='none',
+        help='Use the same body shape for both people (p1=copy P1, p2=copy P2, mean=average betas)'
+    )
     args = parser.parse_args()
 
     data_dir = args.data_dir
@@ -358,6 +384,7 @@ if __name__=='__main__':
         dataset=args.dataset,
         part_segm=args.part_segm,
         part_colors=args.part_colors,
+        share_shape=args.share_shape,
     )
     if args.dataset == 'chi3d':
         viewer.scene.fps=50
