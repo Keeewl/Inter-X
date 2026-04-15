@@ -123,7 +123,8 @@ class SMPLX_Viewer(Viewer):
         self.render(time, frame_time)
 
     def __init__(self, clip_folder='./data/', text_folder='./texts', title=None, dataset=None,
-                 part_segm=None, part_colors=None, share_shape="none", **kwargs):
+                 part_segm=None, part_colors=None, share_shape="none",
+                 interaction_order_path=None, raw_index_root=None, **kwargs):
         window_title = title or self.title
         super().__init__(title=window_title, **kwargs)
         self.title = window_title
@@ -146,6 +147,33 @@ class SMPLX_Viewer(Viewer):
         self.part_colors = part_colors
         self.part_vertex_colors = None
         self.share_shape = share_shape
+        self.dataset = dataset
+        self.interaction_order_path = interaction_order_path
+        self.raw_index_root = raw_index_root
+        self.order_dict = {}
+        self.raw_index_map = {}
+        self.raw_total_tasks = 0
+        if self.dataset == "interx":
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            if not self.interaction_order_path:
+                candidate = os.path.join(base_dir, "datasets", "interx", "annots", "interaction_order.pkl")
+                if os.path.exists(candidate):
+                    self.interaction_order_path = candidate
+            if not self.raw_index_root:
+                candidate = os.path.join(base_dir, "datasets", "interx", "motions")
+                if os.path.isdir(candidate):
+                    self.raw_index_root = candidate
+            if self.interaction_order_path and os.path.exists(self.interaction_order_path):
+                with open(self.interaction_order_path, "rb") as f:
+                    self.order_dict = pickle.load(f)
+            if self.raw_index_root and os.path.isdir(self.raw_index_root):
+                raw_clips = sorted(
+                    clip for clip in os.listdir(self.raw_index_root) if not clip.startswith(".")
+                )
+                self.raw_total_tasks = len(raw_clips)
+                self.raw_index_map = {
+                    clip_name: clip_idx + 1 for clip_idx, clip_name in enumerate(raw_clips)
+                }
         self.reset_for_interx(clip_folder, text_folder)
         self.load_one_sequence()
 
@@ -162,6 +190,81 @@ class SMPLX_Viewer(Viewer):
 
         self.label_pid = 0
         self.go_to_idx = 0
+
+    def _meta_value(self, params, key, default=None):
+        if key not in params:
+            return default
+        val = params[key]
+        if isinstance(val, np.ndarray):
+            if val.shape == ():
+                val = val.item()
+            elif val.size == 1:
+                val = val.reshape(-1)[0]
+        if isinstance(val, bytes):
+            val = val.decode("utf-8")
+        return val
+
+    def _lookup_raw_index_text(self, clip_name):
+        raw_idx = self.raw_index_map.get(clip_name)
+        if raw_idx is None:
+            return ""
+        return f"{raw_idx}/{self.raw_total_tasks}"
+
+    def _build_meta_text(self, params_p1, params_p2, clip_name=""):
+        dataset_key = self._meta_value(params_p1, "dataset_key", "")
+        data_index = self._meta_value(params_p1, "data_index", "")
+        sample_idx = self._meta_value(params_p1, "sample_idx", "")
+        action_id = self._meta_value(params_p1, "action_id", "")
+        action_name = self._meta_value(params_p1, "action_name", "")
+        rep_i = self._meta_value(params_p1, "rep_i", "")
+        action_i = self._meta_value(params_p1, "action_i", "")
+        actor_is_p1 = self._meta_value(params_p1, "actor_is_p1", "")
+        actor_map = self._meta_value(params_p1, "actor_reactor_mapping", "")
+        start_frame = self._meta_value(params_p1, "start_frame", "")
+        end_frame = self._meta_value(params_p1, "end_frame", "")
+        raw_nframes = self._meta_value(params_p1, "raw_nframes", "")
+        sampling = self._meta_value(params_p1, "sampling", "")
+        sampling_step = self._meta_value(params_p1, "sampling_step", "")
+        num_frames = self._meta_value(params_p1, "num_frames", "")
+        motion_length = self._meta_value(params_p1, "motion_length", "")
+        role_p1 = self._meta_value(params_p1, "source_role", "")
+        role_p2 = self._meta_value(params_p2, "source_role", "")
+
+        frame_ix = params_p1.get("frame_ix", None)
+        frame_ix_len = ""
+        if isinstance(frame_ix, np.ndarray) and frame_ix.size:
+            frame_ix = frame_ix[frame_ix >= 0]
+            frame_ix_len = int(frame_ix.shape[0])
+
+        raw_lookup_key = dataset_key or clip_name
+        raw_index_text = self._lookup_raw_index_text(raw_lookup_key) if raw_lookup_key else ""
+
+        lines = []
+        if dataset_key:
+            lines.append(f"dataset_key: {dataset_key}")
+        if raw_index_text:
+            lines.append(f"raw_index: {raw_index_text}")
+        if data_index != "":
+            lines.append(f"data_index: {data_index}  sample_idx: {sample_idx}")
+        if action_id != "" or action_name:
+            lines.append(f"action_id: {action_id}  action_name: {action_name}")
+        if rep_i != "" or action_i != "":
+            lines.append(f"rep_i: {rep_i}  action_i: {action_i}")
+        if actor_is_p1 != "" or actor_map:
+            lines.append(f"actor_is_p1: {actor_is_p1}  mapping: {actor_map}")
+        if start_frame != "" or end_frame != "" or raw_nframes != "":
+            lines.append(
+                f"start_frame: {start_frame}  end_frame: {end_frame}  raw_nframes: {raw_nframes}"
+            )
+        if frame_ix_len != "":
+            lines.append(f"frame_ix_len: {frame_ix_len}")
+        if sampling or sampling_step != "":
+            lines.append(f"sampling: {sampling}  sampling_step: {sampling_step}")
+        if num_frames != "" or motion_length != "":
+            lines.append(f"num_frames: {num_frames}  motion_length: {motion_length}")
+        if role_p1 or role_p2:
+            lines.append(f"P1_role: {role_p1}  P2_role: {role_p2}")
+        return "\n".join([str(x) for x in lines if x != ""])
 
     def key_event(self, key, action, modifiers):
         if action==self.wnd.keys.ACTION_PRESS:
@@ -269,6 +372,8 @@ class SMPLX_Viewer(Viewer):
         poses_rhand_p2 = params_p2['pose_rhand'].reshape(nf_p2,-1)
         transl_p2 = params_p2['trans']
         gender_p2 = str(params_p2['gender'])
+        clip_name = os.path.basename(npy_folder)
+        meta_text = self._build_meta_text(params_p1, params_p2, clip_name=clip_name)
 
         if self.share_shape == "p1":
             betas_p2 = betas_p1
@@ -292,6 +397,26 @@ class SMPLX_Viewer(Viewer):
             )
 
         use_part_colors = self.part_vertex_colors is not None
+        actor_color = (0.10, 0.47, 0.78, 1.0)
+        reactor_color = (0.88, 0.30, 0.20, 1.0)
+        role_p1 = self._meta_value(params_p1, "source_role", "")
+        role_p2 = self._meta_value(params_p2, "source_role", "")
+        if not role_p1 and not role_p2 and self.order_dict and clip_name in self.order_dict:
+            actor_is_p1 = int(self.order_dict[clip_name]) == 1
+            role_p1 = "actor" if actor_is_p1 else "reactor"
+            role_p2 = "reactor" if actor_is_p1 else "actor"
+        if role_p1 == "actor":
+            p1_color = actor_color
+        elif role_p1 == "reactor":
+            p1_color = reactor_color
+        else:
+            p1_color = actor_color
+        if role_p2 == "actor":
+            p2_color = actor_color
+        elif role_p2 == "reactor":
+            p2_color = reactor_color
+        else:
+            p2_color = reactor_color
         seq_kwargs_p1 = dict(
             poses_body=poses_body_p1,
             smpl_layer=smplx_layer_p1,
@@ -317,15 +442,8 @@ class SMPLX_Viewer(Viewer):
             seq_kwargs_p1["color"] = (1.0, 1.0, 1.0, 1.0)
             seq_kwargs_p2["color"] = (1.0, 1.0, 1.0, 1.0)
         else:
-            # initial color
-            # seq_kwargs_p1["color"] = (0.11, 0.53, 0.8, 1.0)
-            # seq_kwargs_p2["color"] = (1.0, 0.27, 0, 1.0)
-
-            # seq_kwargs_p1["color"] = (0.10, 0.47, 0.78, 1.0)   # 蓝色：更稳一点
-            # seq_kwargs_p2["color"] = (0.82, 0.43, 0.28, 1.0)
-
-            seq_kwargs_p1["color"] = (0.10, 0.47, 0.78, 1.0)
-            seq_kwargs_p2["color"] = (0.88, 0.30, 0.20, 1.0)
+            seq_kwargs_p1["color"] = p1_color
+            seq_kwargs_p2["color"] = p2_color
 
         # create smplx sequence for two persons
         smplx_seq_p1 = SMPLSequence(**seq_kwargs_p1)
@@ -336,6 +454,11 @@ class SMPLX_Viewer(Viewer):
         self.scene.add(smplx_seq_p1)
         self.scene.add(smplx_seq_p2)
         self.load_text_from_file()
+        if meta_text:
+            if self.text_val:
+                self.text_val = meta_text + "\n\n" + self.text_val
+            else:
+                self.text_val = meta_text
 
 
     def clear_one_sequence(self):
@@ -353,6 +476,11 @@ if __name__=='__main__':
     parser.add_argument('--title', help='Window title override')
     parser.add_argument('--part_segm', help='Path to parts segmentation .pkl (dict: part_name -> vertex indices)')
     parser.add_argument('--part_colors', help='Path to JSON colors file (dict: part_name -> rgba)')
+    parser.add_argument('--interaction_order', help='Path to interaction_order.pkl (Inter-X actor/reactor mapping)')
+    parser.add_argument(
+        '--raw_index_root',
+        help='Path to raw Inter-X motions root used to map dataset_key to viewer index (defaults to datasets/interx/motions)'
+    )
     parser.add_argument(
         '--share_shape',
         choices=['none', 'p1', 'p2', 'mean'],
@@ -385,6 +513,8 @@ if __name__=='__main__':
         part_segm=args.part_segm,
         part_colors=args.part_colors,
         share_shape=args.share_shape,
+        interaction_order_path=args.interaction_order,
+        raw_index_root=args.raw_index_root,
     )
     if args.dataset == 'chi3d':
         viewer.scene.fps=50

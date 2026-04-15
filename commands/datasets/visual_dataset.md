@@ -15,12 +15,17 @@ ln -s /Users/keweiou/Desktop/Project/Inter-X/datasets/interx/texts ./interx_text
 
 # Visualizing inter-x datasets
 cd visualize/smplx_viewer_tool
-python data_viewer.py --dataset interx
+python data_viewer.py --dataset interx \
+  --interaction_order ../../datasets/interx/annots/interaction_order.pkl
 
 # Load the SMPL-X motion parameters
 cd datasets
 python load_smplx_para.py
 ```
+
+说明：
+- viewer 会按 `datasets/interx/motions/` 的排序显示页码 `xx/11388`。
+- 对于模型 outputs，只要 metadata 中带有 `dataset_key`，viewer 也会自动显示对应的 `raw_index: xx/11388`。
 
 
 
@@ -56,4 +61,3 @@ ln -s /Users/keweiou/Desktop/Project/Inter-X/datasets/chi3d/motions ./chi3d_data
 cd visualize/smplx_viewer_tool
 python data_viewer.py --dataset chi3d
 ```
-
